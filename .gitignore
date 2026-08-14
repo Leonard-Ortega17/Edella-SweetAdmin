@@ -1,0 +1,16 @@
+# Dependencias
+node_modules
+
+# Entorno local (contiene la anon key)
+.env
+
+# Build
+dist
+dist-ssr
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.DS_Store
