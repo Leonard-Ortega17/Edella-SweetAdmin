@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './components/Login'
+import Nav from './components/Nav'
+import Dashboard from './components/dashboard/Dashboard'
+import Productos from './components/productos/Productos'
+import Promociones from './components/promociones/Promociones'
+import Ventas from './components/ventas/Ventas'
+import Gastos from './components/gastos/Gastos'
+import Deudores from './components/deudas/Deudores'
+import Capital from './components/capital/Capital'
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [checking, setChecking] = useState(true)
+  const [vista, setVista] = useState('ventas')
 
   useEffect(() => {
     supabase.auth
@@ -28,6 +37,7 @@ export default function App() {
 
   async function handleSignOut() {
     await supabase.auth.signOut()
+    setVista('ventas')
   }
 
   if (checking) {
@@ -38,10 +48,20 @@ export default function App() {
     return <Login />
   }
 
+  const vistas = {
+    dashboard: <Dashboard />,
+    ventas: <Ventas />,
+    productos: <Productos />,
+    promociones: <Promociones />,
+    gastos: <Gastos />,
+    deudores: <Deudores />,
+    capital: <Capital />,
+  }
+
   return (
-    <div className="center">
-      <h1>Edella SweetAdmin - Fase 1 completa</h1>
-      <button onClick={handleSignOut}>Cerrar sesión</button>
+    <div className="app">
+      <Nav vista={vista} onChange={setVista} onSignOut={handleSignOut} />
+      <main className="contenido">{vistas[vista]}</main>
     </div>
   )
 }
