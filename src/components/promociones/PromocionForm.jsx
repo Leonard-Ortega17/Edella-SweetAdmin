@@ -37,9 +37,7 @@ export default function PromocionForm({ promocion, productosIniciales, onGuardar
     if (!nombre.trim()) return 'El nombre es obligatorio.'
     if (precioPromo === '' || Number(precioPromo) < 0)
       return 'El precio de la promoción no puede ser negativo.'
-    if (items.length === 0)
-      return 'La promoción debe tener al menos un producto.'
-    if (items.some((i) => !i.cantidad || i.cantidad <= 0))
+    if (items.length > 0 && items.some((i) => !i.cantidad || i.cantidad <= 0))
       return 'La cantidad de cada producto debe ser mayor que 0.'
     // Sin duplicados
     if (new Set(items.map((i) => i.producto_id)).size !== items.length)
@@ -122,7 +120,9 @@ export default function PromocionForm({ promocion, productosIniciales, onGuardar
           />
 
           {items.length === 0 && (
-            <p className="promo-vacio">Agrega al menos un producto.</p>
+            <p className="promo-vacio">
+              Opcional: los productos de la promoción se seleccionan en el momento de la venta.
+            </p>
           )}
 
           {items.length > 0 && (
