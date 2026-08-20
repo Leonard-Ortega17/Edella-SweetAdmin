@@ -125,8 +125,8 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ventas, gastos, capital, deudaMovs, mes])
 
-  const luego = datos.totalVentas - datos.totalGastos
   const totalCapital = BOLSILLOS.reduce((s, b) => s + (datos.bolsillos[b] || 0), 0)
+  const luego = totalCapital + datos.totalVentas
 
   return (
     <section className="seccion">
