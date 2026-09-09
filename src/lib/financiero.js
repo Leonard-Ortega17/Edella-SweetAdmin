@@ -11,12 +11,12 @@ export const METODOS_PAGO = [
   'credito',
 ]
 
-// Divide un monto en 3 bolsillos 60/20/20 usando enteros (COP).
-// Los 2 primeros usan truncamiento; el personal absorbe el resto
-// para que la suma sea EXACTAMENTE igual a `valor`.
-export function dividir60_20_20(valor) {
-  const reinversion = Math.floor((valor * 3) / 5)
-  const ahorro = Math.floor(valor / 5)
+// Divide un monto en 3 bolsillos 75/10/15 (reinversion/ahorro/personal)
+// usando enteros (COP). Los 2 primeros usan truncamiento; el personal
+// absorbe el resto para que la suma sea EXACTAMENTE igual a `valor`.
+export function dividir75_15_10(valor) {
+  const reinversion = Math.floor((valor * 3) / 4)
+  const ahorro = Math.floor(valor / 10)
   const personal = valor - reinversion - ahorro
   return { reinversion, ahorro, personal }
 }

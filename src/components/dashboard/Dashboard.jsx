@@ -95,7 +95,7 @@ export default function Dashboard() {
     }
     const topGastos = Object.values(porGasto).sort((a, b) => b.valor - a.valor)
 
-    // Resumen 60/20/20 (movimientos de capital del mes)
+    // Resumen 75/10/15 (movimientos de capital del mes)
     const bolsillos = { reinversion: 0, ahorro: 0, personal: 0 }
     for (const m of capitalMes) {
       const delta = m.tipo === 'ingreso' ? m.valor : -m.valor

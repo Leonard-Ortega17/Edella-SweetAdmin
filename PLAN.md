@@ -6,7 +6,7 @@
 |---|---|
 | **Ventas (Ingresos)** | Registrar ventas de productos individuales o combos/promociones, con propina opcional |
 | **Egresos (Gastos)** | Registrar gastos clasificados en Reinversión, Ahorro o Personal |
-| **Capital disponible** | 3 "bolsillos" (60% Reinversión / 20% Ahorro / 20% Personal) que suben con ventas y bajan con gastos |
+| **Capital disponible** | 3 "bolsillos" (75% Reinversión / 10% Ahorro / 15% Personal) que suben con ventas y bajan con gastos |
 | **Deudores** | Personas que deben dinero; cada abono que hacen entra al capital al momento de recibirse |
 | **Productos** | Catálogo editable (cheesecakes, paves, anchetas) para evitar duplicados por error de tipeo |
 | **Promociones** | Combos guardados, historial de qué tanto se venden, y desglose a nivel de producto individual |
@@ -42,7 +42,7 @@ Esto es lo más importante de organizar antes de codear, porque de aquí sale to
 - id, nombre, activo (si tiene saldo pendiente)
 - `deuda_movimientos`: deudor_id, fecha, tipo (`cargo` | `abono`), valor, venta_id (nullable, solo en el `cargo` inicial), capital_movimiento_id (nullable, se llena cuando el tipo es `abono`, referenciando el ingreso que ese abono generó en capital)
 - El nombre **nunca se borra** aunque la deuda llegue a 0 — solo se saca de la "lista activa de deudores".
-- Un `cargo` (venta a crédito) no toca `capital_movimientos`. Un `abono` sí crea, en el mismo momento, su(s) movimiento(s) en `capital_movimientos` repartidos 60/20/20.
+- Un `cargo` (venta a crédito) no toca `capital_movimientos`. Un `abono` sí crea, en el mismo momento, su(s) movimiento(s) en `capital_movimientos` repartidos 75/10/15.
 
 ### Usuarios
 - Solo 2 cuentas (tú y tu pareja), gestionadas por el sistema de autenticación de Supabase. No hace falta tabla propia.
@@ -51,19 +51,19 @@ Esto es lo más importante de organizar antes de codear, porque de aquí sale to
 
 ## 3. Reglas de negocio a tener claras
 
-1. **División 60/20/20:** cada venta genera 3 movimientos automáticos en `capital_movimientos` (reinversión, ahorro, personal) proporcionales al total.
-2. **Todo dinero recibido en una venta entra al reparto**, no solo el precio del producto: propina, domicilio que el cliente decide dejarle, o cualquier "vueltas" que el cliente diga que se quede, se suma al total de esa venta y se reparte 60/20/20 igual que el resto. No hay una categoría aparte para esto — todo es capital ganado en la venta.
+1. **División 75/10/15 (antes 60/20/20):** cada venta genera 3 movimientos automáticos en `capital_movimientos` (reinversión, ahorro, personal) proporcionales al total.
+2. **Todo dinero recibido en una venta entra al reparto**, no solo el precio del producto: propina, domicilio que el cliente decide dejarle, o cualquier "vueltas" que el cliente diga que se quede, se suma al total de esa venta y se reparte 75/10/15 igual que el resto. No hay una categoría aparte para esto — todo es capital ganado en la venta.
 3. **Selección de productos por catálogo, no texto libre:** al registrar una venta, se busca/selecciona desde `productos` (autocompletado tipo "escribe 'che' y aparecen las opciones"). Esto evita que "Fresa", "fresa" y "Fresaa" cuenten como productos distintos en las estadísticas.
 4. **Promociones = venta doble registro:** 1 venta de la promoción (para comparar promos entre sí) + N ventas de producto individual (para el top de productos).
 5. **Anchetas:** se manejan como un producto normal más del catálogo (no como una combinación de sub-productos armada aparte). Si en el futuro retoman esa línea con fuerza, se puede reconsiderar modelarlas como combos.
-6. **Deudores — capital y deuda se mueven en paralelo:** al registrar la venta a crédito, **no** se genera ningún movimiento de capital, solo un `cargo` en `deuda_movimientos` (todavía no ha entrado dinero real). Pero cada **abono** que la persona vaya haciendo sí genera, en el mismo momento, un movimiento en `capital_movimientos` (repartido 60/20/20) **y** una reducción del saldo pendiente de esa deuda. Ejemplo: deuda de $18.000, capital actual $100.000 → abonan $10.000 → deuda queda en $8.000 **y** capital queda en $110.000, en la misma acción. No hace falta esperar a que la deuda llegue a $0 para que el dinero cuente.
+6. **Deudores — capital y deuda se mueven en paralelo:** al registrar la venta a crédito, **no** se genera ningún movimiento de capital, solo un `cargo` en `deuda_movimientos` (todavía no ha entrado dinero real). Pero cada **abono** que la persona vaya haciendo sí genera, en el mismo momento, un movimiento en `capital_movimientos` (repartido 75/10/15) **y** una reducción del saldo pendiente de esa deuda. Ejemplo: deuda de $18.000, capital actual $100.000 → abonan $10.000 → deuda queda en $8.000 **y** capital queda en $110.000, en la misma acción. No hace falta esperar a que la deuda llegue a $0 para que el dinero cuente.
 7. **Histórico que nunca se borra:** no existe un "cierre de mes" que resetee datos. Los feedbacks mensuales son simplemente consultas filtradas por fecha sobre las mismas tablas que crecen para siempre. El acumulado histórico es la suma de todos los meses.
 
 ---
 
 ## 4. Decisiones ya confirmadas
 
-- **Propina y extras:** entran al total de la venta y se reparten 60/20/20 igual que el resto (ver regla 2 de la sección 3).
+- **Propina y extras:** entran al total de la venta y se reparten 75/10/15 igual que el resto (ver regla 2 de la sección 3).
 - **Abonos de deudas:** se reparten al capital en el mismo momento en que se reciben, no hay que esperar a saldar completo (ver regla 6 de la sección 3).
 - **Anchetas:** se manejan como producto normal del catálogo, no como combo (ver regla 5 de la sección 3).
 
@@ -113,7 +113,7 @@ Te recomiendo pedirle a Claude Code el proyecto **por fases separadas**, no todo
 
 1. **Fase 1 — Base:** esquema de Supabase (tablas + RLS), proyecto React/Vite conectado, login de 2 usuarios.
 2. **Fase 2 — Catálogo:** CRUD de productos y promociones (con buscador/autocompletado).
-3. **Fase 3 — Ventas y gastos:** formularios de ingreso/egreso, incluida la lógica de promociones (doble registro) y el reparto 60/20/20.
+3. **Fase 3 — Ventas y gastos:** formularios de ingreso/egreso, incluida la lógica de promociones (doble registro) y el reparto 75/10/15.
 4. **Fase 4 — Deudores:** alta de personas, abonos, saldar deuda, traslado a capital.
 5. **Fase 5 — Dashboards y feedback mensual:** comparativas, top de productos, top de gastos, comparativa de promociones.
 6. **Fase 6 — Pulido:** diseño amigable, PWA (ícono en el celular), despliegue final en Netlify.
