@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { formatoCOP } from '../../lib/formato'
-import { BOLSILLOS } from '../../lib/financiero'
+import { BOLSILLOS, calcularSaldos } from '../../lib/financiero'
 
 export default function Capital() {
   const [movimientos, setMovimientos] = useState([])
+  const [totales, setTotales] = useState({ reinversion: 0, ahorro: 0, personal: 0 })
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState(null)
 
   async function cargar() {
     setCargando(true)
     setError(null)
-    const { data, error: err } = await supabase
-      .from('capital_movimientos')
-      .select('*')
-      .order('fecha', { ascending: false })
-      .limit(200)
-    if (err) {
-      setError(err.message)
-    } else {
-      setMovimientos(data || [])
+    try {
+      const [recientes, todos] = await Promise.all([
+        supabase
+          .from('capital_movimientos')
+          .select('*')
+          .order('fecha', { ascending: false })
+          .limit(200),
+        supabase.from('capital_movimientos').select('tipo, categoria, valor'),
+      ])
+      if (recientes.error) throw recientes.error
+      if (todos.error) throw todos.error
+      setMovimientos(recientes.data || [])
+      setTotales(calcularSaldos(todos.data || []))
+    } catch (e) {
+      setError(e.message)
     }
     setCargando(false)
   }
@@ -28,16 +35,6 @@ export default function Capital() {
     cargar()
   }, [])
 
-  function saldos() {
-    const s = { reinversion: 0, ahorro: 0, personal: 0 }
-    for (const m of movimientos) {
-      const delta = m.tipo === 'ingreso' ? m.valor : -m.valor
-      s[m.categoria] = (s[m.categoria] || 0) + delta
-    }
-    return s
-  }
-
-  const totales = saldos()
   const totalCapital = BOLSILLOS.reduce((acc, b) => acc + (totales[b] || 0), 0)
 
   return (
@@ -53,7 +50,7 @@ export default function Capital() {
         <div className="capital-resumen">
           {BOLSILLOS.map((b) => (
             <div key={b} className="capital-tarjeta">
-              <span className="capital-bolsillo">{b}</span>
+              <span className="capital-bolsillo">{b} (acumulado)</span>
               <strong>{formatoCOP(totales[b] || 0)}</strong>
             </div>
           ))}

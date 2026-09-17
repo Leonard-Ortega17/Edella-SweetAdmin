@@ -21,6 +21,17 @@ export function dividir75_15_10(valor) {
   return { reinversion, ahorro, personal }
 }
 
+// Calcula el saldo por bolsillo de una lista de movimientos de capital.
+// Los movimientos son { tipo: 'ingreso'|'egreso', categoria, valor }.
+export function calcularSaldos(movs) {
+  const s = { reinversion: 0, ahorro: 0, personal: 0 }
+  for (const m of movs || []) {
+    const delta = m.tipo === 'ingreso' ? m.valor : -m.valor
+    s[m.categoria] = (s[m.categoria] || 0) + delta
+  }
+  return s
+}
+
 // Redimensiona un array de `detalles` (uno por unidad de promoción) a la
 // cantidad deseada. Si crece, rellena con `null` (sin detalles). Si decrece,
 // descarta únicamente las unidades sobrantes. Conserva los detalles ya escritos.

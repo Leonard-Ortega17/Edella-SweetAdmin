@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { formatoCOP } from '../../lib/formato'
-import { BOLSILLOS } from '../../lib/financiero'
+import { BOLSILLOS, calcularSaldos } from '../../lib/financiero'
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -95,15 +95,21 @@ export default function Dashboard() {
     }
     const topGastos = Object.values(porGasto).sort((a, b) => b.valor - a.valor)
 
-    // Resumen 75/10/15 (movimientos de capital del mes)
-    const bolsillos = { reinversion: 0, ahorro: 0, personal: 0 }
-    for (const m of capitalMes) {
-      const delta = m.tipo === 'ingreso' ? m.valor : -m.valor
-      bolsillos[m.categoria] = (bolsillos[m.categoria] || 0) + delta
-    }
+    // Resumen 75/10/15 (movimientos de capital del mes seleccionado)
+    const bolsillos = calcularSaldos(capitalMes)
 
     const totalVentas = ventasMes.reduce((s, v) => s + v.total, 0)
     const totalGastos = gastosMes.reduce((s, g) => s + g.valor, 0)
+
+    // Neto del periodo: lo recibido en efectivo + lo que deben (cargos de
+    // deuda) − lo gastado. Los créditos cuentan aquí, no en los bolsillos.
+    const ingresosCapitalMes = capitalMes
+      .filter((m) => m.tipo === 'ingreso')
+      .reduce((s, m) => s + m.valor, 0)
+    const cargosDeudaMes = deudaMes
+      .filter((d) => d.tipo === 'cargo')
+      .reduce((s, d) => s + d.valor, 0)
+    const neto = ingresosCapitalMes + cargosDeudaMes - totalGastos
 
     // Deudores del mes
     const porDeudor = {}
@@ -120,13 +126,13 @@ export default function Dashboard() {
       bolsillos,
       totalVentas,
       totalGastos,
+      neto,
       porDeudor,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ventas, gastos, capital, deudaMovs, mes])
 
   const totalCapital = BOLSILLOS.reduce((s, b) => s + (datos.bolsillos[b] || 0), 0)
-  const luego = totalCapital + datos.totalVentas
 
   return (
     <section className="seccion">
@@ -158,7 +164,7 @@ export default function Dashboard() {
             </div>
             <div className="capital-tarjeta capital-total">
               <span className="capital-bolsillo">Neto</span>
-              <strong>{formatoCOP(luego)}</strong>
+              <strong>{formatoCOP(datos.neto)}</strong>
             </div>
             {BOLSILLOS.map((b) => (
               <div key={b} className="capital-tarjeta">
