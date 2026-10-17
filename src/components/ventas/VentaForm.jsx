@@ -15,6 +15,39 @@ function nuevoIdInstancia() {
   return `promo-${contadorInstancia}`
 }
 
+function slotsVacios(n) {
+  return Array.from({ length: n }, () => ({
+    producto_id: '',
+    nombre: '',
+    precio_unitario: 0,
+  }))
+}
+
+function redimensionarSlots(slots, n) {
+  const actual = Array.isArray(slots) ? slots : []
+  if (n <= 0) return []
+  return Array.from({ length: n }, (_, i) =>
+    i < actual.length ? actual[i] : { producto_id: '', nombre: '', precio_unitario: 0 }
+  )
+}
+
+// Detalles de las promos de regalo agrupados por unidad: cada unidad contiene
+// sus productos regalados (los que se guardan en venta_promociones.detalles).
+function detallesDeRegalo(promo) {
+  const porUnidad = promo.regalo_cantidad || 1
+  const regalos = promo.regalos || []
+  const unidades = []
+  for (let i = 0; i < regalos.length; i += porUnidad) {
+    unidades.push(
+      regalos.slice(i, i + porUnidad).map((g) => ({
+        producto_id: g.producto_id,
+        nombre: g.nombre,
+      }))
+    )
+  }
+  return unidades
+}
+
 export default function VentaForm({ onGuardada, onCancelar }) {
   const [items, setItems] = useState([])
   const [promos, setPromos] = useState([])
@@ -62,8 +95,18 @@ export default function VentaForm({ onGuardada, onCancelar }) {
   function subtotalPromos() {
     return promos.reduce((s, p) => s + p.cantidad * p.precio_unitario, 0)
   }
+  // Promos de regalo: no aportan dinero (precio 0), pero sus productos
+  // PAGADOS sí se cobran aquí con su precio real.
+  function subtotalRegalos() {
+    return promos.reduce((s, p) => {
+      if (p.tipo !== 'regalo') return s
+      return s + (p.pagos || []).reduce((a, pg) => a + (pg.producto_id ? pg.precio_unitario : 0), 0)
+    }, 0)
+  }
   function totalVenta() {
-    return subtotalMonetario() + subtotalPromos() + (Number(propina) || 0)
+    return (
+      subtotalMonetario() + subtotalPromos() + subtotalRegalos() + (Number(propina) || 0)
+    )
   }
 
   function agregarProducto(producto) {
@@ -113,6 +156,32 @@ export default function VentaForm({ onGuardada, onCancelar }) {
     }
 
     setError(null)
+
+    if (promo.tipo === 'regalo') {
+      const nPagos = promo.pago_cantidad || 1
+      const nRegalos = promo.regalo_cantidad || 1
+      setPromos((prev) => [
+        ...prev,
+        {
+          id: nuevoIdInstancia(),
+          promocion_id: promo.id,
+          tipo: 'regalo',
+          nombre: promo.nombre,
+          cantidad: 1,
+          precio_unitario: 0,
+          pago_categoria_id: promo.pago_categoria_id,
+          regalo_categoria_id: promo.regalo_categoria_id,
+          pago_cantidad: nPagos,
+          regalo_cantidad: nRegalos,
+          pagos: slotsVacios(nPagos),
+          regalos: slotsVacios(nRegalos),
+          detalles: [],
+        },
+      ])
+      setPromoAgregar('')
+      return
+    }
+
     // Cada instancia de promoción es independiente: puede agregarse varias veces
     // y cada una conserva su propio id y sus propios detalles.
     setPromos((prev) => [
@@ -143,15 +212,62 @@ export default function VentaForm({ onGuardada, onCancelar }) {
   }
 
   function cambiarCantidadPromo(id, valor) {
-    actualizarPromo(id, (p) => ({
-      ...p,
-      cantidad: Number(valor),
-      detalles: redimensionarDetalles(p.detalles, Number(valor)),
-    }))
+    actualizarPromo(id, (p) => {
+      const n = Number(valor)
+      if (p.tipo === 'regalo') {
+        return {
+          ...p,
+          cantidad: n,
+          pagos: redimensionarSlots(p.pagos, n * (p.pago_cantidad || 1)),
+          regalos: redimensionarSlots(p.regalos, n * (p.regalo_cantidad || 1)),
+        }
+      }
+      return {
+        ...p,
+        cantidad: n,
+        detalles: redimensionarDetalles(p.detalles, n),
+      }
+    })
   }
 
   function quitarPromo(id) {
     setPromos((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function seleccionarPago(id, indice, producto) {
+    actualizarPromo(id, (p) => {
+      const pagos = (p.pagos || []).slice()
+      pagos[indice] = {
+        producto_id: producto.id,
+        nombre: producto.nombre,
+        precio_unitario: producto.precio_base,
+      }
+      return { ...p, pagos }
+    })
+  }
+
+  function limpiarPago(id, indice) {
+    actualizarPromo(id, (p) => {
+      const pagos = (p.pagos || []).slice()
+      pagos[indice] = { producto_id: '', nombre: '', precio_unitario: 0 }
+      return { ...p, pagos }
+    })
+  }
+
+  function seleccionarRegalo(id, indice, producto) {
+    actualizarPromo(id, (p) => {
+      const regalos = (p.regalos || []).slice()
+      regalos[indice] = { producto_id: producto.id, nombre: producto.nombre }
+      return { ...p, regalos }
+    })
+  }
+
+  function limpiarRegalo(id, indice) {
+    actualizarPromo(id, (p) => {
+      const regalos = (p.regalos || []).slice()
+      regalos[indice] = { producto_id: '', nombre: '' }
+      return { ...p, regalos }
+    })
   }
 
   // Detalles por unidad: lista de productos seleccionados (sin sabor ni valor).
@@ -213,6 +329,20 @@ export default function VentaForm({ onGuardada, onCancelar }) {
   function construirDesglose() {
     const desglose = []
     for (const promo of promos) {
+      // Promo de regalo: los regalos entran al desglose (estadísticas) con
+      // precio 0; el dinero de los pagados se cobra aparte con su precio real.
+      if (promo.tipo === 'regalo') {
+        for (const g of promo.regalos || []) {
+          if (!g.producto_id) continue
+          desglose.push({
+            producto_id: g.producto_id,
+            cantidad: 1,
+            precio_unitario: 0,
+            origen: 'promocion',
+          })
+        }
+        continue
+      }
       const comp = composiciones[promo.promocion_id] || []
       const unidades = Array.isArray(promo.detalles) ? promo.detalles : []
       const tieneDetalles = unidades.some(
@@ -273,6 +403,13 @@ export default function VentaForm({ onGuardada, onCancelar }) {
       if (inicial < 0 || inicial > totalVenta())
         return 'El pago inicial no puede ser negativo ni superar el total.'
     }
+    for (const p of promos) {
+      if (p.tipo !== 'regalo') continue
+      if ((p.pagos || []).some((x) => !x.producto_id))
+        return `Promoción "${p.nombre}": falta elegir todos los productos pagados.`
+      if ((p.regalos || []).some((x) => !x.producto_id))
+        return `Promoción "${p.nombre}": falta elegir todos los productos regalados (gratis).`
+    }
     return null
   }
 
@@ -313,14 +450,30 @@ export default function VentaForm({ onGuardada, onCancelar }) {
       precio_unitario: i.precio_unitario,
       origen: 'individual',
     }))
+    // Los productos PAGADOS de las promos de regalo se registran como items
+    // normales (con su precio real): son los que suman dinero a la venta.
+    const p_items_pagos = promos.flatMap((p) => {
+      if (p.tipo !== 'regalo') return []
+      return (p.pagos || [])
+        .filter((x) => x.producto_id)
+        .map((x) => ({
+          producto_id: x.producto_id,
+          cantidad: 1,
+          precio_unitario: x.precio_unitario,
+          origen: 'individual',
+        }))
+    })
     const p_items_desglose = construirDesglose()
-    const p_items = [...p_items_items, ...p_items_desglose]
+    const p_items = [...p_items_items, ...p_items_pagos, ...p_items_desglose]
 
     const p_promos = promos.map((p) => ({
       promocion_id: p.promocion_id,
       cantidad: p.cantidad,
       precio_unitario: p.precio_unitario,
-      detalles: normalizarDetallesParaEnviar(p.detalles),
+      detalles:
+        p.tipo === 'regalo'
+          ? normalizarDetallesParaEnviar(detallesDeRegalo(p))
+          : normalizarDetallesParaEnviar(p.detalles),
     }))
 
     let p_recibido = null
@@ -407,7 +560,7 @@ export default function VentaForm({ onGuardada, onCancelar }) {
             <option value="">Selecciona una promoción...</option>
             {promosDisponibles.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.nombre} ({formatoCOP(p.precio_promo)})
+                {p.nombre} ({p.tipo === 'regalo' ? 'Regalo y gratis' : formatoCOP(p.precio_promo)})
               </option>
             ))}
           </select>
@@ -418,7 +571,7 @@ export default function VentaForm({ onGuardada, onCancelar }) {
                 <li key={p.id} className="promo-item promo-item-columna">
                   <div className="promo-fila">
                     <span className="promo-nombre">
-                      {p.nombre} ({formatoCOP(p.precio_unitario)}){promos.length > 1 ? ` — #${idx + 1}` : ''}
+                      {p.nombre} ({p.tipo === 'regalo' ? 'Regalo y gratis' : formatoCOP(p.precio_unitario)}){promos.length > 1 ? ` — #${idx + 1}` : ''}
                     </span>
                     <input
                       type="number"
@@ -436,15 +589,25 @@ export default function VentaForm({ onGuardada, onCancelar }) {
                       Quitar
                     </button>
                   </div>
-                  <PromoDetalles
-                    promoId={p.id}
-                    cantidad={p.cantidad}
-                    detalles={p.detalles}
-                    onAgregarArticulo={agregarArticulo}
-                    onSeleccionarArticulo={seleccionarArticulo}
-                    onLimpiarArticulo={limpiarArticulo}
-                    onQuitarArticulo={quitarArticulo}
-                  />
+                  {p.tipo === 'regalo' ? (
+                    <RegaloSlots
+                      promo={p}
+                      onSeleccionarPago={seleccionarPago}
+                      onLimpiarPago={limpiarPago}
+                      onSeleccionarRegalo={seleccionarRegalo}
+                      onLimpiarRegalo={limpiarRegalo}
+                    />
+                  ) : (
+                    <PromoDetalles
+                      promoId={p.id}
+                      cantidad={p.cantidad}
+                      detalles={p.detalles}
+                      onAgregarArticulo={agregarArticulo}
+                      onSeleccionarArticulo={seleccionarArticulo}
+                      onLimpiarArticulo={limpiarArticulo}
+                      onQuitarArticulo={quitarArticulo}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -603,6 +766,80 @@ function PromoDetalles({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Promo "Regalo y gratis": por cada unidad de la promo se eligen los productos
+// PAGADOS (suman al total, con su precio) y los productos REGALADOS ($0). Cada
+// buscador queda filtrado a la categoría configurada en la promoción.
+function RegaloSlots({
+  promo,
+  onSeleccionarPago,
+  onLimpiarPago,
+  onSeleccionarRegalo,
+  onLimpiarRegalo,
+}) {
+  const pagos = promo.pagos || []
+  const regalos = promo.regalos || []
+
+  return (
+    <div className="promo-detalles">
+      <div className="promo-detalle-unidad">
+        <span className="promo-detalle-titulo">Productos pagados</span>
+        {pagos.map((p, pos) => (
+          <div key={'pago-' + pos} className="promo-detalle-par">
+            {p.producto_id ? (
+              <>
+                <span className="promo-detalle-elegido">
+                  {p.nombre} · {formatoCOP(p.precio_unitario)}
+                </span>
+                <button
+                  type="button"
+                  className="btn-secundario"
+                  onClick={() => onLimpiarPago(promo.id, pos)}
+                >
+                  Cambiar
+                </button>
+              </>
+            ) : (
+              <ProductoBuscador
+                onSeleccionar={(producto) => onSeleccionarPago(promo.id, pos, producto)}
+                soloActivos
+                categoriaId={promo.pago_categoria_id}
+                placeholder="Buscar producto pagado..."
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="promo-detalle-unidad">
+        <span className="promo-detalle-titulo">Regalos (gratis)</span>
+        {regalos.map((r, pos) => (
+          <div key={'regalo-' + pos} className="promo-detalle-par">
+            {r.producto_id ? (
+              <>
+                <span className="promo-detalle-elegido">{r.nombre} · gratis</span>
+                <button
+                  type="button"
+                  className="btn-secundario"
+                  onClick={() => onLimpiarRegalo(promo.id, pos)}
+                >
+                  Cambiar
+                </button>
+              </>
+            ) : (
+              <ProductoBuscador
+                onSeleccionar={(producto) => onSeleccionarRegalo(promo.id, pos, producto)}
+                soloActivos
+                categoriaId={promo.regalo_categoria_id}
+                placeholder="Buscar producto de regalo..."
+              />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

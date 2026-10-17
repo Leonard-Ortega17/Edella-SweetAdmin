@@ -5,6 +5,7 @@ export default function ProductoBuscador({
   onSeleccionar,
   soloActivos = true,
   excluirIds = [],
+  categoriaId = null,
   placeholder = 'Buscar producto...',
 }) {
   const [termino, setTermino] = useState('')
@@ -34,6 +35,10 @@ export default function ProductoBuscador({
       query = query.eq('activo', true)
     }
 
+    if (categoriaId) {
+      query = query.eq('categoria_id', categoriaId)
+    }
+
     query.then(({ data, error: err }) => {
       if (!activo) return
       setBuscando(false)
@@ -52,7 +57,7 @@ export default function ProductoBuscador({
     return () => {
       activo = false
     }
-  }, [termino, soloActivos, excluirIds])
+  }, [termino, soloActivos, excluirIds, categoriaId])
 
   function seleccionar(producto) {
     onSeleccionar(producto)

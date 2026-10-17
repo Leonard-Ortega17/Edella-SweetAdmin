@@ -154,6 +154,7 @@ export default function Promociones() {
               <tr>
                 <th>Nombre</th>
                 <th>Descripción</th>
+                <th>Tipo</th>
                 <th>Precio</th>
                 <th>Estado</th>
                 <th>Acciones</th>
@@ -162,14 +163,19 @@ export default function Promociones() {
             <tbody>
               {promociones.length === 0 && (
                 <tr>
-                  <td colSpan="5">Sin promociones.</td>
+                  <td colSpan="6">Sin promociones.</td>
                 </tr>
               )}
               {promociones.map((p) => (
                 <tr key={p.id}>
                   <td>{p.nombre}</td>
                   <td>{p.descripcion || '-'}</td>
-                  <td>{formatoCOP(p.precio_promo)}</td>
+                  <td>
+                    <span className={p.tipo === 'regalo' ? 'badge ok' : 'badge info'}>
+                      {p.tipo === 'regalo' ? 'Regalo y gratis' : 'Precio fijo'}
+                    </span>
+                  </td>
+                  <td>{p.tipo === 'regalo' ? '—' : formatoCOP(p.precio_promo)}</td>
                   <td>
                     <span className={p.activa ? 'badge ok' : 'badge no'}>
                       {p.activa ? 'Activa' : 'Inactiva'}

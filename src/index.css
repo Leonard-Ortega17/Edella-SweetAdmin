@@ -293,6 +293,11 @@ button:disabled {
   color: #b23b3b;
 }
 
+.badge.info {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
 .acciones {
   display: flex;
   gap: 0.45rem;
